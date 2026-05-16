@@ -51,7 +51,7 @@ Example with all inputs set:
 
 ```yaml
 name: DNSControl-Action
-uses: StackExchange/dnscontrol-action
+uses: DNSControl/dnscontrol-action
 with:
   check: true
   cmdargs: preview --expect-no-changes
@@ -64,11 +64,9 @@ with:
 
 **Simple DNSControl Preview Example**
 
-Run `dnscontrol preview` from a PR:
+See the `examples` directory for ready to use workflows. Run `dnscontrol preview` from a PR:
 
 ```yaml
-# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-
 name: DNSControl-Preview
 
 on:
@@ -76,7 +74,7 @@ on:
     paths:
       - '*dnsconfig.js'
       - '*creds.json'
-# FYI: The "on" statement for poush/merge is very different. See example.
+# FYI: The "on" statement for push/merge is very different. See examples/pr_push.yml.
 
 permissions:
   contents: read
@@ -89,7 +87,7 @@ jobs:
     steps:
       -
         name: Checkout repo
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        uses: actions/checkout
 
       -
         # Extract the secret and write it to the file.
@@ -98,7 +96,7 @@ jobs:
 
       -
         name: call dnscontrol action
-        uses: StackExchange/dnscontrol-action@f227f6014445e9a45ca0e75d80296a4c7f796884
+        uses: DNSControl/dnscontrol-action
         with:
           cmdargs: preview
           post_pr_comment: true

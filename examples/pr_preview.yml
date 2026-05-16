@@ -97,7 +97,7 @@ jobs:
 
       -
         name: call dnscontrol action
-        uses: StackExchange/dnscontrol-action@f227f6014445e9a45ca0e75d80296a4c7f796884
+        uses: DNSControl/dnscontrol-action@f227f6014445e9a45ca0e75d80296a4c7f796884
         with:
           cmdargs: preview
           post_pr_comment: true
