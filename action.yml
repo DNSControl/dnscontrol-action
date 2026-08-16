@@ -297,20 +297,21 @@ runs:
       if: ${{ steps.check.outcome == 'success' || steps.check.outcome == 'skipped' }}
       continue-on-error: true
       shell: bash
-      env:
-        NO_COLOR: 'true'
-        DNSCONTROL_COMMAND: ${{ inputs.cmdargs }}
       run: |
         # DNSControl
         set +e
-        DNSCONTROL_CMD=$($DNSCONTROL $DNSCONTROL_COMMAND --config "$DNSCONFIG_FILE" $CREDS_ARG 2>&1)
-        err=$?
+        TMP_OUT="$(mktemp)"
+        
+        $DNSCONTROL ${{ inputs.cmdargs }} --config "$DNSCONFIG_FILE" $CREDS_ARG 2>&1 | tee "$TMP_OUT"
+        err=${PIPESTATUS[0]}
+
         DELIMITER="DNSCONTROL-$RANDOM"
         {
           echo "output<<$DELIMITER"
-          echo "$DNSCONTROL_CMD"
+          cat "$TMP_OUT"
           echo "$DELIMITER"
         } >>"$GITHUB_OUTPUT"
+        rm -f "$TMP_OUT"
         exit $err
 
     - name: Write output file
