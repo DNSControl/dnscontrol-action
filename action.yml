@@ -257,7 +257,7 @@ runs:
         exit $err
 
     - name: Attach Check Results as PR comment
-      uses: thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b # v3.0.1
+      uses: https://github.com/thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b # v3.0.1
       # execute if user set post_pr_comment, this is a PR event, AND dnscontrol check ran and failed
       if: ${{
              inputs.post_pr_comment == 'true' &&
@@ -298,19 +298,21 @@ runs:
       continue-on-error: true
       shell: bash
       env:
-        NO_COLOR: 'true'
         DNSCONTROL_COMMAND: ${{ inputs.cmdargs }}
       run: |
         # DNSControl
         set +e
-        DNSCONTROL_CMD=$($DNSCONTROL $DNSCONTROL_COMMAND --config "$DNSCONFIG_FILE" $CREDS_ARG 2>&1)
-        err=$?
+        TMP_OUT="$(mktemp)"
+        $DNSCONTROL $DNSCONTROL_COMMAND --config "$DNSCONFIG_FILE" $CREDS_ARG 2>&1 | tee "$TMP_OUT"
+        err=${PIPESTATUS[0]}
+
         DELIMITER="DNSCONTROL-$RANDOM"
         {
           echo "output<<$DELIMITER"
-          echo "$DNSCONTROL_CMD"
+          cat "$TMP_OUT"
           echo "$DELIMITER"
         } >>"$GITHUB_OUTPUT"
+        rm -f "$TMP_OUT"
         exit $err
 
     - name: Write output file
@@ -327,7 +329,7 @@ runs:
         echo "output_file=$OUTPUT_FILE" >>"$GITHUB_OUTPUT"
 
     - name: Attach Results as PR comment
-      uses: thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b # v3.0.1
+      uses: https://github.com/thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b # v3.0.1
       # execute if user set post_pr_comment, this is a PR event, AND dnscontrol job ran
       if: ${{
              inputs.post_pr_comment == 'true' &&
