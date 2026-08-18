@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-action.json
 
-name: DNSControl Action
-description: DNSControl GitHub Action using configurable GitHub release
+name: DNSControl Action (Official)
+description: The Official DNSControl GitHub Action.
 author: Eli Heady <eli.heady@gmail.com>
 
 inputs:
@@ -99,7 +99,7 @@ runs:
         echo "DNSCONTROL_VERSION=$DNSCONTROL_VERSION" >>"$GITHUB_ENV"
 
         # set default curl args
-        CURL='curl -H user-agent:stackexchange-dnscontrol-action -fsS --retry 5 --retry-max-time 30'
+        CURL='curl -H user-agent:official-dnscontrol-action -fsS --retry 5 --retry-max-time 30'
         CURLJSON="$CURL -H Accept:application/vnd.github.v3+json "
         echo "CURL=$CURL" >>"$GITHUB_ENV"
         echo "CURLJSON=$CURLJSON" >>"$GITHUB_ENV"
