@@ -4,6 +4,10 @@ name: DNSControl Action (Official)
 description: The Official DNSControl GitHub Action.
 author: Eli Heady <eli.heady@gmail.com>
 
+branding:
+  icon: 'sliders'
+  color: 'blue'
+
 inputs:
 
   check:
