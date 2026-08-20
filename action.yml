@@ -261,7 +261,7 @@ runs:
         exit $err
 
     - name: Attach Check Results as PR comment
-      uses: https://github.com/thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b # v3.0.1
+      uses: thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b # v3.0.1
       # execute if user set post_pr_comment, this is a PR event, AND dnscontrol check ran and failed
       if: ${{
              inputs.post_pr_comment == 'true' &&
@@ -333,7 +333,7 @@ runs:
         echo "output_file=$OUTPUT_FILE" >>"$GITHUB_OUTPUT"
 
     - name: Attach Results as PR comment
-      uses: https://github.com/thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b # v3.0.1
+      uses: thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b # v3.0.1
       # execute if user set post_pr_comment, this is a PR event, AND dnscontrol job ran
       if: ${{
              inputs.post_pr_comment == 'true' &&
