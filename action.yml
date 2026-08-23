@@ -266,12 +266,8 @@ runs:
         # Download DNSControl
         $FJECHO "Download DNSControl"
         $CURL -H "Accept: application/octet-stream" \
-          -L "${URL}" -o "$TEMP/dnscontrol.$EXT"
-
-        $CURL -H "Accept: application/octet-stream" \
           -H "X-GitHub-Api-Version: 2022-11-28" \
-          -L "${URL}" \
-          -o "$TEMP/dnscontrol.$EXT"
+          -L "${URL}" -o "$TEMP/dnscontrol.$EXT"
         echo "file=$TEMP/dnscontrol.$EXT" >>"$GITHUB_OUTPUT"
 
     - name: Unpack DNSControl - Linux or macOS
