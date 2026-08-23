@@ -237,7 +237,7 @@ runs:
         PACKAGE=dnscontrol_${VERSION#v}_${OS}_${ARCH}.${EXT}
         URL=$(\
           printf '%s' $LATEST \
-          | jq -r --arg package $PACKAGE '.assets[] | select(.name == "\($package)") | .url'\
+          | jq -r --arg package $PACKAGE '.assets[] | select(.name == "\($package)") | .browser_download_url'\
         )
         echo "resolved package url: $URL"
         echo "URL=$URL" >>"$GITHUB_ENV"
