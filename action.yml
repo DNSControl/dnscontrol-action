@@ -94,11 +94,14 @@ runs:
         fi
         echo "CREDS_FILE=$CREDS_FILE" >>"$GITHUB_ENV"
 
-        if [[ ! "$DNSCONTROL_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        if [[ ! "$DNSCONTROL_VERSION" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[\-_a-zA-Z0-9]*)?$ ]]; then
           if [[ "$DNSCONTROL_VERSION" != "latest" ]]; then
             echo "invalid DNSControl version format \"$DNSCONTROL_VERSION\""
             exit 1
           fi
+        fi
+        if [[ "$DNSCONTROL_VERSION" != "latest" ]]; then
+          [[ $DNSCONTROL_VERSION != "v"* ]] && DNSCONTROL_VERSION="v$DNSCONTROL_VERSION"
         fi
         echo "DNSCONTROL_VERSION=$DNSCONTROL_VERSION" >>"$GITHUB_ENV"
 
@@ -195,6 +198,10 @@ runs:
           | jq -r --arg version $DNSCONTROL_VERSION --arg package $PACKAGE \
             '.[] | select(.tag_name == "\($version)") | .assets[] | select(.name == "\($package)") | .browser_download_url' \
         )
+        if [[ -z "$URL" ]]; then
+          echo "could not find version \"$DNSCONTROL_VERSION\""
+          exit 1
+        fi
         echo "resolved package url: $URL"
         echo "URL=$URL" >>"$GITHUB_ENV"
 
