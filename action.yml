@@ -367,7 +367,7 @@ runs:
       run: |
         # Check Summary
         $FJECHO "Check Summary"
-        echo "$OUTPUT" >>$"GITHUB_STEP_SUMMARY"
+        echo "$OUTPUT" >>"$GITHUB_STEP_SUMMARY"
         # check failed, stop the job
         exit 1
 
