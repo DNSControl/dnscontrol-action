@@ -77,12 +77,12 @@ runs:
         if [[ -n "$FORGEJO_REPOSITORY" ]]; then
           echo "FJECHO=echo" >>"$GITHUB_ENV"
         else
-          echo "FJECHO=/bin/true" >>"$GITHUB_ENV"
+          echo "FJECHO=true" >>"$GITHUB_ENV"
         fi
         if [[ "${DEBUG}" == "true" ]]; then
           echo "DEBUG=echo" >>"$GITHUB_ENV"
         else
-          echo "DEBUG=/bin/true" >>"$GITHUB_ENV"
+          echo "DEBUG=true" >>"$GITHUB_ENV"
         fi
 
     - name: Sanitize inputs
@@ -156,7 +156,7 @@ runs:
         if [[ $GIT_HOST == "github.com" ]]; then
           API_URL="https://api.github.com"
           API_PAGER="per_page"
-          PAGE_LIMIT=5
+          PAGE_LIMIT=50
           echo "supported=true" >>"$GITHUB_OUTPUT"
         elif [[ -n "$FORGEJO_REPOSITORY" ]]; then
           API_URL="https://${GIT_HOST}/api/v1"
@@ -371,7 +371,6 @@ runs:
           comments_length=$(printf '%s' "$comments" | jq 'length')
           $DEBUG "API returned $comments_length comments"
 
-          # codeberg ignores the page limit
           if [[ -z "$API_PAGER" ]] || \
              [[ $comments_length -lt $PAGE_LIMIT ]] || \
              [[ -n "$comment_id" ]]; then
