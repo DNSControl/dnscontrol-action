@@ -72,17 +72,22 @@ runs:
     - name: Debug Helpers
       shell: bash
       env:
-        DEBUG: ${{ env.DEBUG_ACTION }}
+        DEBUG_ACTION: ${{ env.DEBUG_ACTION }}
       run: |
+        # Debug Helpers
+        if [[ "${DEBUG_ACTION}" == "true" ]]; then
+          echo "DEBUG=echo" >>"$GITHUB_ENV"
+        else
+          # we're setting DEBUG var to the shell builtin `true` if DEBUG_ACTION
+          # var was not 'true' to make the debug statements no-ops. it's confusing, sorry.
+          echo "DEBUG=true" >>"$GITHUB_ENV"
+        fi
         if [[ -n "$FORGEJO_REPOSITORY" ]]; then
           echo "FJECHO=echo" >>"$GITHUB_ENV"
         else
+          # do not echo if we're not on a Forgejo Actions runner
+          # same as above, use shell builtin `true` to no-op the $FJECHO statements with exit 0 return
           echo "FJECHO=true" >>"$GITHUB_ENV"
-        fi
-        if [[ "${DEBUG}" == "true" ]]; then
-          echo "DEBUG=echo" >>"$GITHUB_ENV"
-        else
-          echo "DEBUG=true" >>"$GITHUB_ENV"
         fi
 
     - name: Sanitize inputs
@@ -149,7 +154,7 @@ runs:
         # Resolve Comment Helpers
         $FJECHO "Resolve Comment Helpers"
 
-        echo "marker=<!-- dnscontrol_composite_action -->" >>"$GITHUB_OUTPUT"
+        echo "marker=<!-- dnscontrol-action -->" >>"$GITHUB_OUTPUT"
 
         GIT_HOST=$(git config --get remote.origin.url | sed -E 's|.*@([^/:]+).*|\1|; s|.*://([^/]+).*|\1|')
 
@@ -339,6 +344,8 @@ runs:
       shell: bash
       env:
         API_TOKEN: ${{ github.token }}
+        MARKER: ${{ steps.comment_api.outputs.marker }}
+        STEP_TITLE: "Attach Check Results as PR comment"
         COMMENT_BODY: |
           <details open><summary>DNSControl Check Results</summary>
 
@@ -349,46 +356,7 @@ runs:
           ```
           </details>
           ${{ steps.comment_api.outputs.marker }}
-      run: |
-        # Attach Check Results as PR comment
-        $FJECHO "Attach Check Results as PR comment"
-        comment_id=""
-        page=1
-        while [[ -z "$comment_id" ]]; do
-          if [[ -n "$API_PAGER" ]]; then
-            query_string="?${API_PAGER}=$PAGE_LIMIT&page=$page"
-          else
-            query_string=""
-          fi
-          $DEBUG "fetching page $page of PR comments:"
-          $DEBUG "${PR_API_URL}${query_string}"
-
-          comments=$($CURLJSON -H "Authorization: Token ${API_TOKEN}" \
-            "${PR_API_URL}${query_string}")
-          comment_id=$(printf '%s' "$comments" \
-            | jq -r '[.[] | select(.body | contains("${{ steps.comment_api.outputs.marker }}")) | .id] | first // empty')
-
-          comments_length=$(printf '%s' "$comments" | jq 'length')
-          $DEBUG "API returned $comments_length comments"
-
-          if [[ -z "$API_PAGER" ]] || \
-             [[ $comments_length -lt $PAGE_LIMIT ]] || \
-             [[ -n "$comment_id" ]]; then
-            break
-          fi
-          ((page++))
-        done
-
-        comment_payload=$(jq -n --arg body "$COMMENT_BODY" '{body: $body}')
-
-        if [[ -n "$comment_id" ]]; then
-          comment=$($CURLJSON -X PATCH -H "Authorization: Token ${API_TOKEN}" --json "$comment_payload" \
-            "${COMMENT_API_URL}/$comment_id")
-        else
-          comment=$($CURLJSON -X POST -H "Authorization: Token ${API_TOKEN}" --json "$comment_payload" \
-            "${PR_API_URL}")
-        fi
-        $DEBUG $comment
+      run: bin/comment.sh
 
     - name: Check Summary
       # write check output to job summary if check failed
@@ -452,6 +420,8 @@ runs:
       shell: bash
       env:
         API_TOKEN: ${{ github.token }}
+        MARKER: ${{ steps.comment_api.outputs.marker }}
+        STEP_TITLE: "Attach Results as PR comment"
         COMMENT_BODY: |
           <details open><summary>DNSControl Results</summary>
 
@@ -462,46 +432,7 @@ runs:
           ```
           </details>
           ${{ steps.comment_api.outputs.marker }}
-      run: |
-        # Attach Results as PR comment
-        $FJECHO "Attach Results as PR comment"
-        comment_id=""
-        page=1
-        while [[ -z "$comment_id" ]]; do
-          if [[ -n "$API_PAGER" ]]; then
-            query_string="?${API_PAGER}=$PAGE_LIMIT&page=$page"
-          else
-            query_string=""
-          fi
-          $DEBUG "fetching page $page of PR comments:"
-          $DEBUG "${PR_API_URL}${query_string}"
-
-          comments=$($CURLJSON -H "Authorization: Token ${API_TOKEN}" \
-            "${PR_API_URL}${query_string}")
-          comment_id=$(printf '%s' "$comments" \
-            | jq -r '[.[] | select(.body | contains("${{ steps.comment_api.outputs.marker }}")) | .id] | first // empty')
-
-          comments_length=$(printf '%s' "$comments" | jq 'length')
-          $DEBUG "API returned $comments_length comments"
-
-          if [[ -z "$API_PAGER" ]] || \
-             [[ $comments_length -lt $PAGE_LIMIT ]] || \
-             [[ -n "$comment_id" ]]; then
-            break
-          fi
-          ((page++))
-        done
-
-        comment_payload=$(jq -n --arg body "$COMMENT_BODY" '{body: $body}')
-
-        if [[ -n "$comment_id" ]]; then
-          comment=$($CURLJSON -X PATCH -H "Authorization: Token ${API_TOKEN}" --json "$comment_payload" \
-            "${COMMENT_API_URL}/$comment_id")
-        else
-          comment=$($CURLJSON -X POST -H "Authorization: Token ${API_TOKEN}" --json "$comment_payload" \
-            "${PR_API_URL}")
-        fi
-        $DEBUG $comment
+      run: bin/comment.sh
 
     - name: Job Summary
       id: job_summary
