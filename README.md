@@ -58,6 +58,12 @@ with:
   post_pr_comment: true
   post_summary: true
 ```
+**Note for Forgejo Users**
+
+This action has been tested on Forgejo Actions and can be used as above, with a change to call the action at this project URL
+```yaml
+uses: https://github.com/DNSControl/dnscontrol-action
+```
 
 **Simple DNSControl Preview Example**
 
