@@ -363,7 +363,7 @@ runs:
           ```
           </details>
           ${{ steps.comment_api.outputs.marker }}
-      run: bin/comment.sh
+      run: "${{ github.action_path }}/bin/comment.sh"
 
     - name: Check Summary
       # write check output to job summary if check failed
@@ -439,7 +439,7 @@ runs:
           ```
           </details>
           ${{ steps.comment_api.outputs.marker }}
-      run: bin/comment.sh
+      run: "${{ github.action_path }}/bin/comment.sh"
 
     - name: Job Summary
       id: job_summary
