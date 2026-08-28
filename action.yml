@@ -282,7 +282,7 @@ runs:
           -L "${URL}" -o "$TEMP/dnscontrol.$EXT"
         echo "file=$TEMP/dnscontrol.$EXT" >>"$GITHUB_OUTPUT"
 
-    - name: Unpack DNSControl - Linux or macOS
+    - name: Unpack DNSControl
       if: ${{ runner.os == 'Linux' || runner.os == 'macOS' }}
       shell: bash
       env:
@@ -298,7 +298,7 @@ runs:
         $RESOLVED_TEMP/dnscontrol version
         echo "DNSCONTROL=$RESOLVED_TEMP/dnscontrol" >>"$GITHUB_ENV"
 
-    - name: Unpack DNSControl - Windows
+    - name: Unpack DNSControl
       if: ${{ runner.os == 'Windows' }}
       shell: bash
       env:
@@ -378,7 +378,7 @@ runs:
         # check failed, stop the job
         exit 1
 
-    - name: DNSControl
+    - name: Run DNSControl (VIEW OUTPUT HERE)
       id: dnscontrol
       # execute only if check was ok or skipped
       if: ${{ steps.check.outcome == 'success' || steps.check.outcome == 'skipped' }}
