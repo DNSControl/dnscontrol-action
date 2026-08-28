@@ -307,7 +307,7 @@ runs:
         # DNSControl
         set +e
         TMP_OUT="$(mktemp)"
-        $DNSCONTROL $DNSCONTROL_COMMAND --config "$DNSCONFIG_FILE" $CREDS_ARG 2>&1 | tee "$TMP_OUT"
+        $DNSCONTROL --no-colors $DNSCONTROL_COMMAND --config "$DNSCONFIG_FILE" $CREDS_ARG 2>&1 | tee "$TMP_OUT"
         err=${PIPESTATUS[0]}
 
         DELIMITER="DNSCONTROL-$RANDOM"
