@@ -350,6 +350,7 @@ runs:
              ) }}
       shell: bash
       env:
+        ACTION_PATH: ${{ github.action_path }}
         API_TOKEN: ${{ github.token }}
         MARKER: ${{ steps.comment_api.outputs.marker }}
         STEP_TITLE: "Attach Check Results as PR comment"
@@ -363,7 +364,7 @@ runs:
           ```
           </details>
           ${{ steps.comment_api.outputs.marker }}
-      run: "${{ github.action_path }}/bin/comment.sh"
+      run: "$ACTION_PATH/bin/comment.sh"
 
     - name: Check Summary
       # write check output to job summary if check failed
@@ -426,6 +427,7 @@ runs:
              steps.dnscontrol.outcome != 'skipped' }}
       shell: bash
       env:
+        ACTION_PATH: ${{ github.action_path }}
         API_TOKEN: ${{ github.token }}
         MARKER: ${{ steps.comment_api.outputs.marker }}
         STEP_TITLE: "Attach Results as PR comment"
@@ -439,7 +441,7 @@ runs:
           ```
           </details>
           ${{ steps.comment_api.outputs.marker }}
-      run: "${{ github.action_path }}/bin/comment.sh"
+      run: "$ACTION_PATH/bin/comment.sh"
 
     - name: Job Summary
       id: job_summary
