@@ -13,7 +13,7 @@ This is a composite GitHub action for running configurable DNSControl commands.
 * Specify alternate locations for `dnsconfig.js` and `creds.json`
 * Choose which version of DNSControl to run (the default is the latest release)
 
-# Credentials
+## Credentials
 
 Do NOT store API keys or other credentials in a git repo!
 
@@ -58,6 +58,12 @@ with:
   post_pr_comment: true
   post_summary: true
 ```
+**Note for Forgejo Users**
+
+This action has been tested on Forgejo Actions and can be used as above, with a change to call the action at this project URL
+```yaml
+uses: https://github.com/DNSControl/dnscontrol-action
+```
 
 **Simple DNSControl Preview Example**
 
@@ -101,8 +107,27 @@ jobs:
           check: true
 ```
 
-### Contributing
+## Contributing
 
 PRs welcome!
 
-Changes or additions to the shell scripts in action.yml should pass `shellcheck -S warning`. A PR workflow will run a shellcheck wrapper (`bin/shellcheck.sh`) and any findings at warning or error levels will fail the check. The wrapper script has been tested in Bash 5.2 and zsh 5.9 on Linux and MacOS.
+Changes or additions to the shell scripts and action `run` steps must pass `bin/shellcheck.sh`. Any findings at warning or error levels will fail the check. The wrapper script has been tested in Bash 5.2 and zsh 5.9 on Linux and MacOS.
+
+### Testing
+
+To assist with troubleshooting changes, debug output can be enabled:
+
+```yaml
+uses: DNSControl/dnscontrol-action
+env:
+  DEBUG_ACTION: true
+with:
+  cmdargs: ...
+```
+
+New debug statements can be added to the action by using `$DEBUG` in place of `echo`
+```shell
+... other code ...
+$DEBUG "new output here"
+...
+```

@@ -69,6 +69,27 @@ runs:
         echo "::error title=error::Action supports Linux, Windows, and macOS only"
         exit 1
 
+    - name: Debug Helpers
+      shell: bash
+      env:
+        DEBUG_ACTION: ${{ env.DEBUG_ACTION }}
+      run: |
+        # Debug Helpers
+        if [[ "${DEBUG_ACTION}" == "true" ]]; then
+          echo "DEBUG=echo" >>"$GITHUB_ENV"
+        else
+          # we're setting DEBUG var to the shell builtin `true` if DEBUG_ACTION
+          # var was not 'true' to make the debug statements no-ops. it's confusing, sorry.
+          echo "DEBUG=true" >>"$GITHUB_ENV"
+        fi
+        if [[ -n "$FORGEJO_REPOSITORY" ]]; then
+          echo "FJECHO=echo" >>"$GITHUB_ENV"
+        else
+          # do not echo if we're not on a Forgejo Actions runner
+          # same as above, use shell builtin `true` to no-op the $FJECHO statements with exit 0 return
+          echo "FJECHO=true" >>"$GITHUB_ENV"
+        fi
+
     - name: Sanitize inputs
       env:
         DNSCONTROL_VERSION: ${{ inputs.version }}
@@ -79,6 +100,7 @@ runs:
       shell: bash
       run: |
         # Sanitize inputs
+        $FJECHO "Sanitize inputs"
         set +e
         echo "OUTPUT_FILE=$OUTPUT_FILE" >>"$GITHUB_ENV"
 
@@ -106,8 +128,9 @@ runs:
         echo "DNSCONTROL_VERSION=$DNSCONTROL_VERSION" >>"$GITHUB_ENV"
 
         # set default curl args
-        CURL='curl -H user-agent:official-dnscontrol-action -fsS --retry 5 --retry-max-time 30'
-        CURLJSON="$CURL -H Accept:application/vnd.github.v3+json "
+        CURL="curl -fsS --retry 5 --retry-max-time 30 -H user-agent:official-dnscontrol-action -H X-GitHub-Api-Version:2022-11-28"
+        CURLJSON="$CURL -H Accept:application/vnd.github.v3+json,application/json"
+        
         echo "CURL=$CURL" >>"$GITHUB_ENV"
         echo "CURLJSON=$CURLJSON" >>"$GITHUB_ENV"
 
@@ -123,6 +146,43 @@ runs:
         esac
         echo "CREDS_ARG=$CREDS_ARG" >>"$GITHUB_ENV"
 
+    - name: Resolve Comment Helpers
+      shell: bash
+      if: ${{ inputs.post_pr_comment == 'true' }}
+      id: comment_api
+      env:
+        REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: |
+        # Resolve Comment Helpers
+        $FJECHO "Resolve Comment Helpers"
+
+        echo "marker=<!-- dnscontrol-action -->" >>"$GITHUB_OUTPUT"
+
+        GIT_HOST=$(git config --get remote.origin.url | sed -E 's|.*@([^/:]+).*|\1|; s|.*://([^/]+).*|\1|')
+
+        if [[ $GIT_HOST == "github.com" ]]; then
+          API_URL="https://api.github.com"
+          API_PAGER="per_page"
+          PAGE_LIMIT=50
+          echo "supported=true" >>"$GITHUB_OUTPUT"
+        elif [[ -n "$FORGEJO_REPOSITORY" ]]; then
+          API_URL="https://${GIT_HOST}/api/v1"
+          # note comment pagination not supported on Forgejo
+          echo "supported=true" >>"$GITHUB_OUTPUT"
+        else
+          echo "NOTICE: API is unknown for git host \"$GIT_HOST\" - PR comments disabled"
+          echo "supported=false" >>"$GITHUB_OUTPUT"
+        fi
+
+        PR_API_URL="${API_URL}/repos/$REPO/issues/$PR_NUMBER/comments"
+        COMMENT_API_URL="${API_URL}/repos/$REPO/issues/comments"
+
+        echo "PR_API_URL=$PR_API_URL" >>"$GITHUB_ENV"
+        echo "COMMENT_API_URL=$COMMENT_API_URL" >>"$GITHUB_ENV"
+        echo "API_PAGER=$API_PAGER" >>"$GITHUB_ENV"
+        echo "PAGE_LIMIT=$PAGE_LIMIT" >>"$GITHUB_ENV"
+
     - name: Resolve OS and Arch
       env:
         RUNNER_OS: ${{ runner.os }}
@@ -130,6 +190,7 @@ runs:
       shell: bash
       run: |
         # Resolve OS and Arch
+        $FJECHO "Resolve OS and Arch"
         case "$RUNNER_OS" in
           Linux)
             OS='linux'
@@ -176,8 +237,10 @@ runs:
       shell: bash
       run: |
         # Resolve download URL for latest
-        LATEST=$($CURLJSON -L https://api.github.com/repos/StackExchange/dnscontrol/releases/latest)
+        $FJECHO "Resolve download URL for latest"
+        LATEST=$($CURLJSON -L https://api.github.com/repos/DNSControl/dnscontrol/releases/latest)
         VERSION=$(printf '%s' $LATEST | jq -r ".tag_name")
+        echo "resolved latest version: $VERSION"
 
         PACKAGE=dnscontrol_${VERSION#v}_${OS}_${ARCH}.${EXT}
         URL=$(\
@@ -192,9 +255,10 @@ runs:
       shell: bash
       run: |
         # Resolve download URL
+        $FJECHO "Resolve download URL"
         PACKAGE=dnscontrol_${DNSCONTROL_VERSION#v}_${OS}_${ARCH}.${EXT}
         URL=$(\
-          $CURLJSON -L https://api.github.com/repos/StackExchange/dnscontrol/releases \
+          $CURLJSON -L https://api.github.com/repos/DNSControl/dnscontrol/releases \
           | jq -r --arg version $DNSCONTROL_VERSION --arg package $PACKAGE \
             '.[] | select(.tag_name == "\($version)") | .assets[] | select(.name == "\($package)") | .browser_download_url' \
         )
@@ -212,7 +276,10 @@ runs:
         TEMP: ${{ runner.temp }}
       run: |
         # Download DNSControl
-        $CURL -L "${URL}" -o "$TEMP/dnscontrol.$EXT"
+        $FJECHO "Download DNSControl"
+        $CURL -H "Accept: application/octet-stream" \
+          -H "X-GitHub-Api-Version: 2022-11-28" \
+          -L "${URL}" -o "$TEMP/dnscontrol.$EXT"
         echo "file=$TEMP/dnscontrol.$EXT" >>"$GITHUB_OUTPUT"
 
     - name: Unpack DNSControl - Linux or macOS
@@ -223,6 +290,7 @@ runs:
         PACKAGE: ${{ steps.download.outputs.file }}
       run: |
         # Unpack DNSControl - Linux or macOS
+        $FJECHO "Unpack DNSControl - Linux or macOS"
         RESOLVED_TEMP="$(readlink -f $TEMP)/dnscontrol$RANDOM"
         mkdir -p "$RESOLVED_TEMP"
         tar -C "$RESOLVED_TEMP" -xvzf $PACKAGE dnscontrol
@@ -238,6 +306,7 @@ runs:
         PACKAGE: ${{ steps.download.outputs.file }}
       run: |
         # Unpack DNSControl - Windows
+        $FJECHO "Unpack DNSControl - Windows"
         RESOLVED_TEMP="$TEMP/dnscontrol$RANDOM" # windows lacks readlink, so this may be relative
         mkdir -p "$RESOLVED_TEMP"
         unzip -d "$RESOLVED_TEMP" $PACKAGE dnscontrol.exe
@@ -254,33 +323,37 @@ runs:
         NO_COLOR: 'true'
       run: |
         # DNSControl check
+        $FJECHO "DNSControl check"
         set +e
-        DNSCONTROL_CMD=$($DNSCONTROL check --config "$DNSCONFIG_FILE" 2>&1)
-        err=$?
-        export DNSCONTROL_CMD
+        TMP_OUT="$(mktemp)"
+        $DNSCONTROL check --config "$DNSCONFIG_FILE" 2>&1 | tee "$TMP_OUT"
+        err=${PIPESTATUS[0]}
+
         DELIMITER="DNSCONTROL-$RANDOM"
         {
           echo "output<<$DELIMITER"
-          echo "$DNSCONTROL_CMD"
+          cat "$TMP_OUT"
           echo "$DELIMITER"
         } >>"$GITHUB_OUTPUT"
-        echo "$DNSCONTROL_CMD"
+        rm -f "$TMP_OUT"
         exit $err
 
     - name: Attach Check Results as PR comment
-      uses: thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b # v3.0.1
-      # execute if user set post_pr_comment, this is a PR event, AND dnscontrol check ran and failed
+      # execute if comment api is supported, user set post_pr_comment=true, this is a PR event, AND dnscontrol check ran and failed
       if: ${{
+             steps.comment_api.outputs.supported == 'true' &&
              inputs.post_pr_comment == 'true' &&
              github.event.pull_request.number != '' &&
              (
                steps.check.outcome != 'skipped' &&
                steps.check.outcome != 'success'
              ) }}
-      with:
-        # comment-tag must be the same for both PR comment steps so they update the same comment
-        comment-tag: dnscontrol_composite_action
-        message: |
+      shell: bash
+      env:
+        API_TOKEN: ${{ github.token }}
+        MARKER: ${{ steps.comment_api.outputs.marker }}
+        STEP_TITLE: "Attach Check Results as PR comment"
+        COMMENT_BODY: |
           <details open><summary>DNSControl Check Results</summary>
 
           ### DNSControl Check Results
@@ -289,6 +362,8 @@ runs:
           ${{ steps.check.outputs.output }}
           ```
           </details>
+          ${{ steps.comment_api.outputs.marker }}
+      run: bin/comment.sh
 
     - name: Check Summary
       # write check output to job summary if check failed
@@ -298,7 +373,8 @@ runs:
         OUTPUT: ${{ steps.check.outputs.output }}
       run: |
         # Check Summary
-        echo "$OUTPUT" >>$"GITHUB_STEP_SUMMARY"
+        $FJECHO "Check Summary"
+        echo "$OUTPUT" >>"$GITHUB_STEP_SUMMARY"
         # check failed, stop the job
         exit 1
 
@@ -312,6 +388,7 @@ runs:
         DNSCONTROL_COMMAND: ${{ inputs.cmdargs }}
       run: |
         # DNSControl
+        $FJECHO "DNSControl"
         set +e
         TMP_OUT="$(mktemp)"
         $DNSCONTROL $DNSCONTROL_COMMAND --config "$DNSCONFIG_FILE" $CREDS_ARG 2>&1 | tee "$TMP_OUT"
@@ -336,19 +413,23 @@ runs:
         OUTPUT: ${{ steps.dnscontrol.outputs.output }}
       run: |
         # Write output file
+        $FJECHO "Write output file"
         echo "$OUTPUT" > "$OUTPUT_FILE"
         echo "output_file=$OUTPUT_FILE" >>"$GITHUB_OUTPUT"
 
     - name: Attach Results as PR comment
-      uses: thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b # v3.0.1
-      # execute if user set post_pr_comment, this is a PR event, AND dnscontrol job ran
+      # execute if comment api is supported, user set post_pr_comment=true, this is a PR event, AND dnscontrol command ran
       if: ${{
+             steps.comment_api.outputs.supported == 'true' &&
              inputs.post_pr_comment == 'true' &&
              github.event.pull_request.number != '' &&
              steps.dnscontrol.outcome != 'skipped' }}
-      with:
-        comment-tag: dnscontrol_composite_action
-        message: |
+      shell: bash
+      env:
+        API_TOKEN: ${{ github.token }}
+        MARKER: ${{ steps.comment_api.outputs.marker }}
+        STEP_TITLE: "Attach Results as PR comment"
+        COMMENT_BODY: |
           <details open><summary>DNSControl Results</summary>
 
           ### DNSControl Results
@@ -357,6 +438,8 @@ runs:
           ${{ steps.dnscontrol.outputs.output }}
           ```
           </details>
+          ${{ steps.comment_api.outputs.marker }}
+      run: bin/comment.sh
 
     - name: Job Summary
       id: job_summary
@@ -367,6 +450,7 @@ runs:
         OUTPUT: ${{ steps.dnscontrol.outputs.output }}
       run: |
         # Job Summary
+        $FJECHO "Job Summary"
         echo "$OUTPUT" >>"$GITHUB_STEP_SUMMARY"
 
     - name: Action failed
@@ -374,5 +458,6 @@ runs:
       shell: bash
       run: |
         # Action failed
+        $FJECHO "Action failed"
         echo "::error title=error::DNSControl command failed"
         exit 1
