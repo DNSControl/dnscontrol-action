@@ -19,7 +19,7 @@ while [[ -z "$comment_id" ]]; do
   comments=$($CURLJSON -H "Authorization: Token ${API_TOKEN}" \
     "${PR_API_URL}${query_string}")
   comment_id=$(printf '%s' "$comments" \
-    | jq -r '[.[] | select(.body | contains("${MARKER}")) | .id] | first // empty')
+    | jq --arg marker "$MARKER" -r '[.[] | select(.body | contains($marker)) | .id] | first // empty')
 
   comments_length=$(printf '%s' "$comments" | jq 'length')
   $DEBUG "API returned $comments_length comments"
@@ -43,4 +43,6 @@ else
   comment=$($CURLJSON -X POST -H "Authorization: Token ${API_TOKEN}" --json "$comment_payload" \
     "${PR_API_URL}")
 fi
-$DEBUG "$comment"
+
+comment_url=$(printf '%s' "$comment" | jq -r '.html_url')
+$DEBUG "$comment_url"
