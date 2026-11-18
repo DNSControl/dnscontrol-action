@@ -31,6 +31,9 @@ See the comments in the file for setup instructions.
 **Inputs**
 
 * **cmdargs**: The command and flags you want to run (required)
+* **version**: The DNSControl version to run, e.g. `5.7.0` (optional, default is the latest release)
+* **verify_checksum**: Verify the downloaded package against the release's `checksums.txt` (`true`/`false`, default is `true`; any other value is an error). This catches corrupted downloads, but `checksums.txt` is served from the same release as the package, so use `checksum` to also guard against a tampered release
+* **checksum**: The expected sha256 of the package for the runner's OS/architecture, as a bare hash or as `<sha256>  <filename>` lines (one per platform, e.g. copied from the release's `checksums.txt`). When set, it is used instead of `checksums.txt`, so the trusted hash lives in your own repository. Requires a pinned `version` (not `latest`) and takes precedence over `verify_checksum` (optional)
 * **dnsconfig_file**: The alternate location of `dnsconfig.js` (optional)
 * **creds_file**: The alternate location of `creds.json` (optional)
 * **output_file**: The file into which the command output should be written (optional)

@@ -20,6 +20,20 @@ inputs:
     description: Desired version to run (default 'latest')
     required: false
 
+  verify_checksum:
+    default: 'true'
+    description: Verify the downloaded DNSControl package against the release's checksums.txt (default 'true')
+    required: false
+
+  checksum:
+    default: ''
+    description: >-
+      Expected sha256 of the DNSControl package for the runner's OS and architecture, either as a bare hash or as
+      lines of `<sha256>  <package filename>` (e.g. a subset of the release's checksums.txt, one line per platform).
+      When set, the download is verified against this value instead of the release's checksums.txt, which protects
+      against a tampered release. Requires a pinned `version`; takes precedence over `verify_checksum`.
+    required: false
+
   cmdargs:
     description: DNSControl command and optional arguments
     required: true
@@ -97,6 +111,8 @@ runs:
         DNSCONFIG_FILE: ${{ inputs.dnsconfig_file }}
         CREDS_FILE: ${{ inputs.creds_file }}
         CMDARGS: ${{ inputs.cmdargs }}
+        VERIFY_CHECKSUM: ${{ inputs.verify_checksum }}
+        CHECKSUM: ${{ inputs.checksum }}
       shell: bash
       run: |
         # Sanitize inputs
@@ -126,6 +142,39 @@ runs:
           [[ $DNSCONTROL_VERSION != "v"* ]] && DNSCONTROL_VERSION="v$DNSCONTROL_VERSION"
         fi
         echo "DNSCONTROL_VERSION=$DNSCONTROL_VERSION" >>"$GITHUB_ENV"
+
+        # verification is only skipped on an explicit 'false', anything that is
+        # not a clear true/false is rejected instead of silently disabling it
+        VERIFY_CHECKSUM=$(tr '[:upper:]' '[:lower:]' <<<"$VERIFY_CHECKSUM")
+        if [[ "$VERIFY_CHECKSUM" != "true" && "$VERIFY_CHECKSUM" != "false" ]]; then
+          echo "invalid verify_checksum \"$VERIFY_CHECKSUM\", must be 'true' or 'false'"
+          exit 1
+        fi
+        echo "VERIFY_CHECKSUM=$VERIFY_CHECKSUM" >>"$GITHUB_ENV"
+
+        if [[ -n "$CHECKSUM" ]]; then
+          if [[ "$DNSCONTROL_VERSION" == "latest" ]]; then
+            echo "the checksum input requires a pinned version, not \"latest\""
+            exit 1
+          fi
+          # either a bare sha256 or `<sha256>  <filename>` lines
+          CHECKSUM="${CHECKSUM//$'\r'/}"
+          WORDS=$(wc -w <<<"$CHECKSUM")
+          if [[ "$WORDS" -eq 0 ]]; then
+            echo "the checksum input is empty, remove it or set it to a sha256"
+            exit 1
+          elif [[ "$WORDS" -eq 1 ]]; then
+            # surrounding whitespace (e.g. from a YAML block scalar) is fine, as in the download step
+            CHECKSUM=$(tr -d '[:space:]' <<<"$CHECKSUM")
+            if [[ ! "$CHECKSUM" =~ ^[0-9a-fA-F]{64}$ ]]; then
+              echo "invalid checksum \"$CHECKSUM\", must be a sha256 (64 hex characters) or lines of \"<sha256>  <filename>\""
+              exit 1
+            fi
+          elif ! awk 'NF && (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-fA-F]+$/) { bad=1 } END { exit bad }' <<<"$CHECKSUM"; then
+            echo "invalid checksum, every line must be \"<sha256>  <filename>\""
+            exit 1
+          fi
+        fi
 
         # set default curl args
         CURL="curl -fsS --retry 5 --retry-max-time 30 -H user-agent:official-dnscontrol-action -H X-GitHub-Api-Version:2022-11-28"
@@ -232,40 +281,36 @@ runs:
         echo "EXT=$EXT" >>"$GITHUB_ENV"
 
 
-    - name: Resolve download URL for latest
-      if: ${{ inputs.version == 'latest' }}
-      shell: bash
-      run: |
-        # Resolve download URL for latest
-        $FJECHO "Resolve download URL for latest"
-        LATEST=$($CURLJSON -L https://api.github.com/repos/DNSControl/dnscontrol/releases/latest)
-        VERSION=$(printf '%s' $LATEST | jq -r ".tag_name")
-        echo "resolved latest version: $VERSION"
-
-        PACKAGE=dnscontrol_${VERSION#v}_${OS}_${ARCH}.${EXT}
-        URL=$(\
-          printf '%s' $LATEST \
-          | jq -r --arg package $PACKAGE '.assets[] | select(.name == "\($package)") | .browser_download_url'\
-        )
-        echo "resolved package url: $URL"
-        echo "URL=$URL" >>"$GITHUB_ENV"
-
     - name: Resolve download URL
-      if: ${{ inputs.version != 'latest' }}
       shell: bash
       run: |
         # Resolve download URL
         $FJECHO "Resolve download URL"
-        PACKAGE=dnscontrol_${DNSCONTROL_VERSION#v}_${OS}_${ARCH}.${EXT}
-        URL=$(\
-          $CURLJSON -L https://api.github.com/repos/DNSControl/dnscontrol/releases \
-          | jq -r --arg version $DNSCONTROL_VERSION --arg package $PACKAGE \
-            '.[] | select(.tag_name == "\($version)") | .assets[] | select(.name == "\($package)") | .browser_download_url' \
-        )
-        if [[ -z "$URL" ]]; then
-          echo "could not find version \"$DNSCONTROL_VERSION\""
-          exit 1
+        VERSION="$DNSCONTROL_VERSION"
+        if [[ "$VERSION" == "latest" ]]; then
+          # The tag of the latest release is the redirect target of the web
+          # URL. Unlike the releases API this is not subject to the (low)
+          # unauthenticated API rate limit.
+          if ! LOCATION=$($CURL -o /dev/null -w '%{redirect_url}' https://github.com/DNSControl/dnscontrol/releases/latest); then
+            echo "could not resolve the latest version, see the error above (set the version input to pin one)"
+            exit 1
+          fi
+          if [[ "$LOCATION" != */releases/tag/* ]]; then
+            echo "could not resolve the latest version, got redirect \"$LOCATION\""
+            exit 1
+          fi
+          VERSION="${LOCATION##*/releases/tag/}"
+          if [[ ! "$VERSION" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[\-_a-zA-Z0-9]*)?$ ]]; then
+            echo "could not resolve the latest version, got unexpected version \"$VERSION\" from redirect \"$LOCATION\""
+            exit 1
+          fi
+          echo "resolved latest version: $VERSION"
         fi
+
+        # The asset URL of a release is deterministic, so there is no need to
+        # query the releases API to find it.
+        PACKAGE=dnscontrol_${VERSION#v}_${OS}_${ARCH}.${EXT}
+        URL="https://github.com/DNSControl/dnscontrol/releases/download/${VERSION}/${PACKAGE}"
         echo "resolved package url: $URL"
         echo "URL=$URL" >>"$GITHUB_ENV"
 
@@ -274,12 +319,60 @@ runs:
       shell: bash
       env:
         TEMP: ${{ runner.temp }}
+        CHECKSUM: ${{ inputs.checksum }}
       run: |
         # Download DNSControl
         $FJECHO "Download DNSControl"
-        $CURL -H "Accept: application/octet-stream" \
+        if ! $CURL -H "Accept: application/octet-stream" \
           -H "X-GitHub-Api-Version: 2022-11-28" \
-          -L "${URL}" -o "$TEMP/dnscontrol.$EXT"
+          -L "${URL}" -o "$TEMP/dnscontrol.$EXT"; then
+          echo "::error title=error::could not download \"$URL\" - see the curl error above, and check that DNSControl version \"$(basename "$(dirname "$URL")")\" exists for $OS/$ARCH"
+          exit 1
+        fi
+
+        PACKAGE="${URL##*/}"
+        EXPECTED=""
+        HINT=""
+        if [[ -n "$CHECKSUM" ]]; then
+          # checksum pinned by the caller: either a bare sha256 or `<sha256>  <filename>` lines
+          SOURCE="the checksum input"
+          CHECKSUM="${CHECKSUM//$'\r'/}" # tolerate CRLF line endings
+          if [[ "$(tr -d '[:space:]' <<<"$CHECKSUM")" =~ ^[0-9a-fA-F]{64}$ ]]; then
+            EXPECTED=$(tr -d '[:space:]' <<<"$CHECKSUM")
+            HINT=" - a bare checksum only matches one platform, use lines of \"<sha256>  <filename>\" for builds on several platforms"
+          else
+            EXPECTED=$(awk -v package="$PACKAGE" '$2 == package || $2 == "*" package { print $1 }' <<<"$CHECKSUM" | sort -u)
+          fi
+        elif [[ "$VERIFY_CHECKSUM" == "true" ]]; then
+          # checksums.txt is published next to the package in every release
+          SOURCE="$(dirname "$URL")/checksums.txt"
+          if ! $CURL -L "$SOURCE" -o "$TEMP/dnscontrol-checksums.txt"; then
+            echo "::error title=error::could not download \"$SOURCE\" - set verify_checksum to false to skip checksum verification"
+            exit 1
+          fi
+          EXPECTED=$(awk -v package="$PACKAGE" '$2 == package || $2 == "*" package { print $1 }' "$TEMP/dnscontrol-checksums.txt")
+        fi
+
+        if [[ -n "$CHECKSUM" || "$VERIFY_CHECKSUM" == "true" ]]; then
+          if [[ -z "$EXPECTED" ]]; then
+            echo "::error title=error::no checksum for \"$PACKAGE\" found in $SOURCE (set verify_checksum to false to skip checksum verification)"
+            exit 1
+          fi
+          if [[ ! "$EXPECTED" =~ ^[0-9a-fA-F]{64}$ ]]; then
+            echo "::error title=error::expected checksum for \"$PACKAGE\" in $SOURCE is not a single sha256: $EXPECTED"
+            exit 1
+          fi
+          if command -v sha256sum >/dev/null; then
+            ACTUAL=$(sha256sum "$TEMP/dnscontrol.$EXT" | awk '{ print $1 }')
+          else
+            ACTUAL=$(shasum -a 256 "$TEMP/dnscontrol.$EXT" | awk '{ print $1 }')
+          fi
+          if [[ "$(tr '[:upper:]' '[:lower:]' <<<"$ACTUAL")" != "$(tr '[:upper:]' '[:lower:]' <<<"$EXPECTED")" ]]; then
+            echo "::error title=error::checksum mismatch for \"$PACKAGE\" (from $SOURCE): expected $EXPECTED, got $ACTUAL$HINT"
+            exit 1
+          fi
+          echo "checksum verified for $PACKAGE against $SOURCE: $ACTUAL"
+        fi
         echo "file=$TEMP/dnscontrol.$EXT" >>"$GITHUB_OUTPUT"
 
     - name: Unpack DNSControl
